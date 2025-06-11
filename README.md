@@ -85,7 +85,35 @@ measuring again to ensure it improved, then share results. Check with gemini in 
 
 The final implementation resulted in a 26% improvement in JSON parsing performance for the selected library, reducing processing time through targeted, collaborative optimizations guided by Gemini’s analysis and Claude’s refinement.
 
-## Quickstart (5 minutes)
+## Quickstart 
+
+### Option 1: uvx (Instant - No Installation Required) ⚡
+
+**Run directly from GitHub without any setup!**
+
+```bash
+# Set your Gemini API key
+export GEMINI_API_KEY=your-gemini-api-key-here
+
+# Run directly from GitHub repository
+uvx --from git+https://github.com/BeehiveInnovations/gemini-mcp-server gemini-mcp-server
+
+# Or use the shorter alias
+uvx --from git+https://github.com/BeehiveInnovations/gemini-mcp-server gemini-mcp
+```
+
+**Prerequisites for uvx:**
+- Python 3.10+ with `uv` installed (`pip install uv` or [install uv](https://docs.astral.sh/uv/getting-started/installation/))
+- A Gemini API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+
+**Benefits:**
+- **Zero installation** - runs directly from GitHub
+- **No Docker required** - uses SQLite instead of Redis  
+- **Automatic dependency management** - uv handles everything
+- **Always latest version** - pulls from main branch
+- **Conversation persistence** - SQLite database in your home directory
+
+### Option 2: Docker Setup (Traditional)
 
 ### Prerequisites
 
@@ -148,6 +176,34 @@ claude mcp list
 # Remove if needed
 claude mcp remove gemini
 ```
+
+#### uvx Configuration (Direct GitHub Execution)
+
+For uvx usage, configure Claude Desktop to run the server directly from GitHub:
+
+```json
+{
+  "mcpServers": {
+    "gemini": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/BeehiveInnovations/gemini-mcp-server",
+        "gemini-mcp-server"
+      ],
+      "env": {
+        "GEMINI_API_KEY": "your-gemini-api-key-here"
+      }
+    }
+  }
+}
+```
+
+**Benefits of uvx configuration:**
+- **No Docker required** - simpler setup
+- **Automatic updates** - always runs latest version from GitHub
+- **SQLite persistence** - conversations stored in `~/.gemini_mcp_conversations.db`
+- **Faster startup** - no container overhead
 
 #### Docker Configuration (Copy from setup script output)
 

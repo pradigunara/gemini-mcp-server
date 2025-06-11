@@ -33,6 +33,20 @@ async def run_manual_live_tests():
         print("❌ GEMINI_API_KEY not found. Set it to run live tests.")
         return False
 
+    # Start redka server for conversation persistence testing
+    print("🔧 Starting redka server for conversation persistence...")
+    from utils.redka_manager import start_redka_server, stop_redka_server, is_redka_running
+    
+    redka_started = start_redka_server()
+    if redka_started:
+        print("✅ Redka server started successfully")
+        # Give it a moment to fully start
+        import time
+        time.sleep(2)
+    else:
+        print("⚠️ Redka server failed to start - conversation persistence will be limited")
+        print("   (This is expected if redka binary is not available)")
+
     try:
         # Test google-genai import
 
@@ -128,11 +142,18 @@ async def run_manual_live_tests():
         print("✅ google-genai library working correctly")
         print("✅ All tools can make live API calls")
         print("✅ Thinking modes functioning properly")
+        if redka_started:
+            print("✅ Redka conversation persistence available")
         return True
 
     except Exception as e:
         print(f"❌ Live test failed: {e}")
         return False
+    finally:
+        # Clean up redka server
+        if redka_started:
+            print("🧹 Stopping redka server...")
+            stop_redka_server()
 
 
 if __name__ == "__main__":

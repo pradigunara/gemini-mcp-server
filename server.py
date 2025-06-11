@@ -487,6 +487,14 @@ async def main():
     """
     # Validate that Gemini API key is available before starting
     configure_gemini()
+    
+    # Start redka server for Redis-compatible conversation persistence
+    from utils.redka_manager import start_redka_server
+    redka_started = start_redka_server()
+    if redka_started:
+        logger.info("Redka server started successfully")
+    else:
+        logger.warning("Redka server failed to start, conversation persistence may not work")
 
     # Log startup message for Docker log monitoring
     logger.info("Gemini MCP Server starting up...")

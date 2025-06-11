@@ -1,3 +1,29 @@
+[project]
+name = "gemini-mcp-server"
+version = "3.0.0"
+description = "Model Context Protocol server for Google Gemini"
+readme = "README.md"
+authors = [{name = "Fahad Gilani"}]
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.0.0",
+    "google-genai>=1.19.0",
+    "pydantic>=2.0.0",
+    "redis>=5.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.11.0",
+]
+
+[project.scripts]
+gemini-mcp-server = "main:cli"
+gemini-mcp = "main:cli"
+
 [tool.black]
 line-length = 120
 target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
@@ -57,3 +83,14 @@ ignore = [
 [build-system]
 requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["tools", "utils", "prompts"]
+py-modules = ["main", "server", "config"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.0",
+    "pytest-asyncio>=1.0.0",
+    "pytest-mock>=3.14.1",
+]
