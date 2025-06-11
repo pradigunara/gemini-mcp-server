@@ -6,27 +6,13 @@ stateless MCP environments. It enables multi-turn conversations between Claude
 and Gemini by storing conversation state in SQLite across independent request cycles.
 
 Key Features:
-- UUID-based conversation thread identification with security validation
-- Turn-by-turn conversation history storage with tool attribution
-- Cross-tool continuation support - switch tools while preserving context
-- File context preservation - files shared in earlier turns remain accessible
-- Automatic turn limiting (10 turns max) to prevent runaway conversations
+- UUID-based conversation thread identification
+- Turn-by-turn conversation history storage
+- Automatic turn limiting to prevent runaway conversations
 - Context reconstruction for stateless request continuity
 - SQLite-based persistence with automatic expiration cleanup
-- Thread-safe operations for concurrent access
-- Graceful degradation when database is unavailable
-
-USAGE EXAMPLE:
-1. Tool A creates thread: create_thread("analyze", request_data) → returns UUID
-2. Tool A adds response: add_turn(UUID, "assistant", response, files=[...], tool_name="analyze")
-3. Tool B continues thread: get_thread(UUID) → retrieves full context
-4. Tool B sees conversation history via build_conversation_history()
-5. Tool B adds its response: add_turn(UUID, "assistant", response, tool_name="codereview")
-
-This enables true AI-to-AI collaboration across the entire tool ecosystem.
 """
 
-import logging
 import os
 import sqlite3
 import uuid
@@ -36,27 +22,12 @@ from typing import Any, Optional
 
 from pydantic import BaseModel
 
-logger = logging.getLogger(__name__)
-
 # Configuration constants
 MAX_CONVERSATION_TURNS = 10  # Maximum turns allowed per conversation thread
 
 
 class ConversationTurn(BaseModel):
-    """
-    Single turn in a conversation
-
-    Represents one exchange in the AI-to-AI conversation, tracking both
-    the content and metadata needed for cross-tool continuation.
-
-    Attributes:
-        role: "user" (Claude) or "assistant" (Gemini)
-        content: The actual message content/response
-        timestamp: ISO timestamp when this turn was created
-        follow_up_question: Optional follow-up question from Gemini to Claude
-        files: List of file paths referenced in this specific turn
-        tool_name: Which tool generated this turn (for cross-tool tracking)
-    """
+    """Single turn in a conversation"""
 
     role: str  # "user" or "assistant"
     content: str
@@ -67,52 +38,16 @@ class ConversationTurn(BaseModel):
 
 
 class ThreadContext(BaseModel):
-    """
-    Complete conversation context for a thread
-
-    Contains all information needed to reconstruct a conversation state
-    across different tools and request cycles. This is the core data
-    structure that enables cross-tool continuation.
-
-    Attributes:
-        thread_id: UUID identifying this conversation thread
-        created_at: ISO timestamp when thread was created
-        last_updated_at: ISO timestamp of last modification
-        tool_name: Name of the tool that initiated this thread
-        turns: List of all conversation turns in chronological order
-        initial_context: Original request data that started the conversation
-    """
+    """Complete conversation context"""
 
     thread_id: str
     created_at: str
     last_updated_at: str
-    tool_name: str  # Tool that created this thread (preserved for attribution)
+    tool_name: str
     turns: list[ConversationTurn]
-    initial_context: dict[str, Any]  # Original request parameters
+    initial_context: dict[str, Any]
 
 
-<<<<<<< HEAD
-def get_redis_client():
-    """
-    Get Redis client from environment configuration
-
-    Creates a Redis client using the REDIS_URL environment variable.
-    Defaults to localhost:6379/0 if not specified.
-
-    Returns:
-        redis.Redis: Configured Redis client with decode_responses=True
-
-    Raises:
-        ValueError: If redis package is not installed
-    """
-    try:
-        import redis
-
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        return redis.from_url(redis_url, decode_responses=True)
-    except ImportError:
-        raise ValueError("redis package required. Install with: pip install redis")
-=======
 def get_db_path() -> Path:
     """Get SQLite database path from environment or default location"""
     db_path = os.getenv("GEMINI_MCP_DB_PATH")
@@ -175,34 +110,15 @@ def get_connection():
     init_database()
     cleanup_expired_threads()  # Clean up on each connection
     return sqlite3.connect(get_db_path())
->>>>>>> f31d299 (feat: add uvx support and replace Redis with SQLite)
 
 
 def create_thread(tool_name: str, initial_request: dict[str, Any]) -> str:
-    """
-    Create new conversation thread and return thread ID
-
-    Initializes a new conversation thread for AI-to-AI discussions.
-    This is called when a tool wants to enable follow-up conversations
-    or when Claude explicitly starts a multi-turn interaction.
-
-    Args:
-        tool_name: Name of the tool creating this thread (e.g., "analyze", "chat")
-        initial_request: Original request parameters (will be filtered for serialization)
-
-    Returns:
-        str: UUID thread identifier that can be used for continuation
-
-    Note:
-        - Thread expires after 1 hour (3600 seconds)
-        - Non-serializable parameters are filtered out automatically
-        - Thread can be continued by any tool using the returned UUID
-    """
+    """Create new conversation thread and return thread ID"""
     thread_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(hours=1)  # 1 hour TTL
 
-    # Filter out non-serializable parameters to avoid JSON encoding issues
+    # Filter out non-serializable parameters
     filtered_context = {
         k: v
         for k, v in initial_request.items()
@@ -211,19 +127,6 @@ def create_thread(tool_name: str, initial_request: dict[str, Any]) -> str:
 
     context = ThreadContext(
         thread_id=thread_id,
-<<<<<<< HEAD
-        created_at=now,
-        last_updated_at=now,
-        tool_name=tool_name,  # Track which tool initiated this conversation
-        turns=[],  # Empty initially, turns added via add_turn()
-        initial_context=filtered_context,
-    )
-
-    # Store in Redis with 1 hour TTL to prevent indefinite accumulation
-    client = get_redis_client()
-    key = f"thread:{thread_id}"
-    client.setex(key, 3600, context.model_dump_json())
-=======
         created_at=now.isoformat(),
         last_updated_at=now.isoformat(),
         tool_name=tool_name,
@@ -239,35 +142,12 @@ def create_thread(tool_name: str, initial_request: dict[str, Any]) -> str:
             VALUES (?, ?, ?, ?)
         """, (thread_id, context.model_dump_json(), now.isoformat(), expires_at.isoformat()))
         conn.commit()
->>>>>>> f31d299 (feat: add uvx support and replace Redis with SQLite)
 
     return thread_id
 
 
 def get_thread(thread_id: str) -> Optional[ThreadContext]:
-<<<<<<< HEAD
-    """
-    Retrieve thread context from Redis
-
-    Fetches complete conversation context for cross-tool continuation.
-    This is the core function that enables tools to access conversation
-    history from previous interactions.
-
-    Args:
-        thread_id: UUID of the conversation thread
-
-    Returns:
-        ThreadContext: Complete conversation context if found
-        None: If thread doesn't exist, expired, or invalid UUID
-
-    Security:
-        - Validates UUID format to prevent injection attacks
-        - Handles Redis connection failures gracefully
-        - No error information leakage on failure
-    """
-=======
     """Retrieve thread context from SQLite"""
->>>>>>> f31d299 (feat: add uvx support and replace Redis with SQLite)
     if not thread_id or not _is_valid_uuid(thread_id):
         return None
 
@@ -283,7 +163,6 @@ def get_thread(thread_id: str) -> Optional[ThreadContext]:
                 return ThreadContext.model_validate_json(row[0])
             return None
     except Exception:
-        # Silently handle errors to avoid exposing Redis details
         return None
 
 
@@ -295,62 +174,28 @@ def add_turn(
     files: Optional[list[str]] = None,
     tool_name: Optional[str] = None,
 ) -> bool:
-    """
-    Add turn to existing thread
-
-    Appends a new conversation turn to an existing thread. This is the core
-    function for building conversation history and enabling cross-tool
-    continuation. Each turn preserves the tool that generated it.
-
-    Args:
-        thread_id: UUID of the conversation thread
-        role: "user" (Claude) or "assistant" (Gemini)
-        content: The actual message/response content
-        follow_up_question: Optional follow-up question from Gemini
-        files: Optional list of files referenced in this turn
-        tool_name: Name of the tool adding this turn (for attribution)
-
-    Returns:
-        bool: True if turn was successfully added, False otherwise
-
-    Failure cases:
-        - Thread doesn't exist or expired
-        - Maximum turn limit reached (5 turns)
-        - Redis connection failure
-
-    Note:
-        - Refreshes thread TTL to 1 hour on successful update
-        - Turn limits prevent runaway conversations
-        - File references are preserved for cross-tool access
-    """
+    """Add turn to existing thread"""
     context = get_thread(thread_id)
     if not context:
         return False
 
-    # Check turn limit to prevent runaway conversations
+    # Check turn limit
     if len(context.turns) >= MAX_CONVERSATION_TURNS:
         return False
 
-    # Create new turn with complete metadata
+    # Add new turn
     turn = ConversationTurn(
         role=role,
         content=content,
         timestamp=datetime.now(timezone.utc).isoformat(),
         follow_up_question=follow_up_question,
-        files=files,  # Preserved for cross-tool file context
-        tool_name=tool_name,  # Track which tool generated this turn
+        files=files,
+        tool_name=tool_name,
     )
 
     context.turns.append(turn)
     context.last_updated_at = datetime.now(timezone.utc).isoformat()
 
-<<<<<<< HEAD
-    # Save back to Redis and refresh TTL
-    try:
-        client = get_redis_client()
-        key = f"thread:{thread_id}"
-        client.setex(key, 3600, context.model_dump_json())  # Refresh TTL to 1 hour
-=======
     # Save back to SQLite with refreshed TTL
     try:
         now = datetime.now(timezone.utc)
@@ -363,194 +208,38 @@ def add_turn(
                 WHERE thread_id = ?
             """, (context.model_dump_json(), expires_at.isoformat(), thread_id))
             conn.commit()
->>>>>>> f31d299 (feat: add uvx support and replace Redis with SQLite)
         return True
     except Exception:
         return False
 
 
-def get_conversation_file_list(context: ThreadContext) -> list[str]:
-    """
-    Get all unique files referenced across all turns in a conversation.
-
-    This function extracts and deduplicates file references from all conversation
-    turns to enable efficient file embedding - files are read once and shared
-    across all turns rather than being embedded multiple times.
-
-    Args:
-        context: ThreadContext containing the complete conversation
-
-    Returns:
-        list[str]: Deduplicated list of file paths referenced in the conversation
-    """
-    if not context.turns:
-        return []
-
-    # Collect all unique files from all turns, preserving order of first appearance
-    seen_files = set()
-    unique_files = []
-
-    for turn in context.turns:
-        if turn.files:
-            for file_path in turn.files:
-                if file_path not in seen_files:
-                    seen_files.add(file_path)
-                    unique_files.append(file_path)
-
-    return unique_files
-
-
-def build_conversation_history(context: ThreadContext, read_files_func=None) -> str:
-    """
-    Build formatted conversation history for tool prompts with embedded file contents.
-
-    Creates a formatted string representation of the conversation history that includes
-    full file contents from all referenced files. Files are embedded only ONCE at the
-    start, even if referenced in multiple turns, to prevent duplication and optimize
-    token usage.
-
-    Args:
-        context: ThreadContext containing the complete conversation
-
-    Returns:
-        str: Formatted conversation history with embedded files ready for inclusion in prompts
-        Empty string if no conversation turns exist
-
-    Format:
-        - Header with thread metadata and turn count
-        - All referenced files embedded once with full contents
-        - Each turn shows: role, tool used, which files were used, content
-        - Clear delimiters for AI parsing
-        - Continuation instruction at end
-
-    Note:
-        This formatted history allows tools to "see" both conversation context AND
-        file contents from previous tools, enabling true cross-tool collaboration
-        while preventing duplicate file embeddings.
-    """
+def build_conversation_history(context: ThreadContext) -> str:
+    """Build formatted conversation history"""
     if not context.turns:
         return ""
-
-    # Get all unique files referenced in this conversation
-    all_files = get_conversation_file_list(context)
 
     history_parts = [
         "=== CONVERSATION HISTORY ===",
         f"Thread: {context.thread_id}",
-        f"Tool: {context.tool_name}",  # Original tool that started the conversation
+        f"Tool: {context.tool_name}",
         f"Turn {len(context.turns)}/{MAX_CONVERSATION_TURNS}",
         "",
+        "Previous exchanges:",
     ]
-
-    # Embed all files referenced in this conversation once at the start
-    if all_files:
-        history_parts.extend(
-            [
-                "=== FILES REFERENCED IN THIS CONVERSATION ===",
-                "The following files have been shared and analyzed during our conversation.",
-                "Refer to these when analyzing the context and requests below:",
-                "",
-            ]
-        )
-
-        # Import required functions
-        from config import MAX_CONTEXT_TOKENS
-
-        if read_files_func is None:
-            from utils.file_utils import read_file_content
-
-            # Optimized: read files incrementally with token tracking
-            file_contents = []
-            total_tokens = 0
-            files_included = 0
-            files_truncated = 0
-
-            for file_path in all_files:
-                try:
-                    # Correctly unpack the tuple returned by read_file_content
-                    formatted_content, content_tokens = read_file_content(file_path)
-                    if formatted_content:
-                        # read_file_content already returns formatted content, use it directly
-                        # Check if adding this file would exceed the limit
-                        if total_tokens + content_tokens <= MAX_CONTEXT_TOKENS:
-                            file_contents.append(formatted_content)
-                            total_tokens += content_tokens
-                            files_included += 1
-                            logger.debug(
-                                f"📄 File embedded in conversation history: {file_path} ({content_tokens:,} tokens)"
-                            )
-                        else:
-                            files_truncated += 1
-                            logger.debug(
-                                f"📄 File truncated due to token limit: {file_path} ({content_tokens:,} tokens, would exceed {MAX_CONTEXT_TOKENS:,} limit)"
-                            )
-                            # Stop processing more files
-                            break
-                    else:
-                        logger.debug(f"📄 File skipped (empty content): {file_path}")
-                except Exception as e:
-                    # Skip files that can't be read but log the failure
-                    logger.warning(
-                        f"📄 Failed to embed file in conversation history: {file_path} - {type(e).__name__}: {e}"
-                    )
-                    continue
-
-            if file_contents:
-                files_content = "".join(file_contents)
-                if files_truncated > 0:
-                    files_content += (
-                        f"\n[NOTE: {files_truncated} additional file(s) were truncated due to token limit]\n"
-                    )
-                history_parts.append(files_content)
-                logger.debug(
-                    f"📄 Conversation history file embedding complete: {files_included} files embedded, {files_truncated} truncated, {total_tokens:,} total tokens"
-                )
-            else:
-                history_parts.append("(No accessible files found)")
-                logger.debug(
-                    f"📄 Conversation history file embedding: no accessible files found from {len(all_files)} requested"
-                )
-        else:
-            # Fallback to original read_files function for backward compatibility
-            files_content = read_files_func(all_files)
-            if files_content:
-                # Add token validation for the combined file content
-                from utils.token_utils import check_token_limit
-
-                within_limit, estimated_tokens = check_token_limit(files_content)
-                if within_limit:
-                    history_parts.append(files_content)
-                else:
-                    # Handle token limit exceeded for conversation files
-                    error_message = f"ERROR: The total size of files referenced in this conversation has exceeded the context limit and cannot be displayed.\nEstimated tokens: {estimated_tokens}, but limit is {MAX_CONTEXT_TOKENS}."
-                    history_parts.append(error_message)
-            else:
-                history_parts.append("(No accessible files found)")
-
-        history_parts.extend(
-            [
-                "",
-                "=== END REFERENCED FILES ===",
-                "",
-            ]
-        )
-
-    history_parts.append("Previous conversation turns:")
 
     for i, turn in enumerate(context.turns, 1):
         role_label = "Claude" if turn.role == "user" else "Gemini"
 
-        # Add turn header with tool attribution for cross-tool tracking
+        # Add turn header with tool info if available
         turn_header = f"\n--- Turn {i} ({role_label}"
         if turn.tool_name:
             turn_header += f" using {turn.tool_name}"
         turn_header += ") ---"
         history_parts.append(turn_header)
 
-        # Add files context if present - but just reference which files were used
-        # (the actual contents are already embedded above)
+        # Add files context if present
         if turn.files:
-            history_parts.append(f"📁 Files used in this turn: {', '.join(turn.files)}")
+            history_parts.append(f"📁 Files referenced: {', '.join(turn.files)}")
             history_parts.append("")  # Empty line for readability
 
         # Add the actual content
@@ -561,25 +250,14 @@ def build_conversation_history(context: ThreadContext, read_files_func=None) -> 
             history_parts.append(f"\n[Gemini's Follow-up: {turn.follow_up_question}]")
 
     history_parts.extend(
-        ["", "=== END CONVERSATION HISTORY ===", "", "Continue this conversation by building on the previous context."]
+        ["", "=== END HISTORY ===", "", "Continue this conversation by building on the previous context."]
     )
 
     return "\n".join(history_parts)
 
 
 def _is_valid_uuid(val: str) -> bool:
-    """
-    Validate UUID format for security
-
-    Ensures thread IDs are valid UUIDs to prevent injection attacks
-    and malformed requests.
-
-    Args:
-        val: String to validate as UUID
-
-    Returns:
-        bool: True if valid UUID format, False otherwise
-    """
+    """Validate UUID format for security"""
     try:
         uuid.UUID(val)
         return True
