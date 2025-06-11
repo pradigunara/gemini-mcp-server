@@ -83,6 +83,10 @@ ignore = [
 requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+packages = ["tools", "utils", "prompts"]
+py-modules = ["main", "server", "config"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.4.0",
