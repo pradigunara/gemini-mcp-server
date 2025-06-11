@@ -20,8 +20,8 @@ dev = [
 ]
 
 [project.scripts]
-gemini-mcp-server = "server:main"
-gemini-mcp = "server:main"
+gemini-mcp-server = "main:cli"
+gemini-mcp = "main:cli"
 
 [tool.black]
 line-length = 120
