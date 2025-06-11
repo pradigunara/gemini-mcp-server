@@ -55,6 +55,6 @@ TEMPERATURE_CREATIVE = 0.7  # For architecture, deep thinking
 MCP_PROMPT_SIZE_LIMIT = 50_000  # 50K characters
 
 # Threading configuration
-# Simple Redis-based conversation threading for stateless MCP environment
-# Set REDIS_URL environment variable to connect to your Redis instance
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+# SQLite-based conversation threading for stateless MCP environment
+# Set GEMINI_MCP_DB_PATH environment variable to customize database location
+# Defaults to ~/.gemini_mcp_conversations.db or temp directory if home not writable

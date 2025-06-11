@@ -2,39 +2,19 @@
 Conversation Memory for AI-to-AI Multi-turn Discussions
 
 This module provides conversation persistence and context reconstruction for
-stateless MCP (Model Context Protocol) environments. It enables multi-turn
-conversations between Claude and Gemini by storing conversation state in Redis
-across independent request cycles.
-
-ARCHITECTURE OVERVIEW:
-The MCP protocol is inherently stateless - each tool request is independent
-with no memory of previous interactions. This module bridges that gap by:
-
-1. Creating persistent conversation threads with unique UUIDs
-2. Storing complete conversation context (turns, files, metadata) in Redis
-3. Reconstructing conversation history when tools are called with continuation_id
-4. Supporting cross-tool continuation - seamlessly switch between different tools
-   while maintaining full conversation context and file references
-
-CROSS-TOOL CONTINUATION:
-A conversation started with one tool (e.g., 'analyze') can be continued with
-any other tool (e.g., 'codereview', 'debug', 'chat') using the same continuation_id.
-The second tool will have access to:
-- All previous conversation turns and responses
-- File context from previous tools (preserved in conversation history)
-- Original thread metadata and timing information
-- Accumulated knowledge from the entire conversation
+stateless MCP environments. It enables multi-turn conversations between Claude
+and Gemini by storing conversation state in SQLite across independent request cycles.
 
 Key Features:
 - UUID-based conversation thread identification with security validation
 - Turn-by-turn conversation history storage with tool attribution
 - Cross-tool continuation support - switch tools while preserving context
 - File context preservation - files shared in earlier turns remain accessible
-- Automatic turn limiting (5 turns max) to prevent runaway conversations
+- Automatic turn limiting (10 turns max) to prevent runaway conversations
 - Context reconstruction for stateless request continuity
-- Redis-based persistence with automatic expiration (1 hour TTL)
+- SQLite-based persistence with automatic expiration cleanup
 - Thread-safe operations for concurrent access
-- Graceful degradation when Redis is unavailable
+- Graceful degradation when database is unavailable
 
 USAGE EXAMPLE:
 1. Tool A creates thread: create_thread("analyze", request_data) → returns UUID
@@ -48,8 +28,10 @@ This enables true AI-to-AI collaboration across the entire tool ecosystem.
 
 import logging
 import os
+import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from typing import Any, Optional
 
 from pydantic import BaseModel
@@ -109,6 +91,7 @@ class ThreadContext(BaseModel):
     initial_context: dict[str, Any]  # Original request parameters
 
 
+<<<<<<< HEAD
 def get_redis_client():
     """
     Get Redis client from environment configuration
@@ -129,6 +112,70 @@ def get_redis_client():
         return redis.from_url(redis_url, decode_responses=True)
     except ImportError:
         raise ValueError("redis package required. Install with: pip install redis")
+=======
+def get_db_path() -> Path:
+    """Get SQLite database path from environment or default location"""
+    db_path = os.getenv("GEMINI_MCP_DB_PATH")
+    if db_path:
+        return Path(db_path)
+    
+    # Default to user's home directory or temp directory
+    home_dir = Path.home()
+    if home_dir.exists() and os.access(home_dir, os.W_OK):
+        return home_dir / ".gemini_mcp_conversations.db"
+    else:
+        # Fallback to temp directory
+        import tempfile
+        return Path(tempfile.gettempdir()) / "gemini_mcp_conversations.db"
+
+
+def init_database():
+    """Initialize SQLite database with conversation tables"""
+    db_path = get_db_path()
+    
+    # Ensure parent directory exists
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS conversation_threads (
+                thread_id TEXT PRIMARY KEY,
+                context_json TEXT NOT NULL,
+                created_at TIMESTAMP NOT NULL,
+                expires_at TIMESTAMP NOT NULL
+            )
+        """)
+        
+        # Index for cleanup operations
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_expires_at 
+            ON conversation_threads(expires_at)
+        """)
+        
+        conn.commit()
+
+
+def cleanup_expired_threads():
+    """Remove expired conversation threads"""
+    db_path = get_db_path()
+    if not db_path.exists():
+        return
+        
+    with sqlite3.connect(db_path) as conn:
+        now = datetime.now(timezone.utc)
+        conn.execute(
+            "DELETE FROM conversation_threads WHERE expires_at < ?",
+            (now.isoformat(),)
+        )
+        conn.commit()
+
+
+def get_connection():
+    """Get SQLite connection with automatic initialization and cleanup"""
+    init_database()
+    cleanup_expired_threads()  # Clean up on each connection
+    return sqlite3.connect(get_db_path())
+>>>>>>> f31d299 (feat: add uvx support and replace Redis with SQLite)
 
 
 def create_thread(tool_name: str, initial_request: dict[str, Any]) -> str:
@@ -152,7 +199,8 @@ def create_thread(tool_name: str, initial_request: dict[str, Any]) -> str:
         - Thread can be continued by any tool using the returned UUID
     """
     thread_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(hours=1)  # 1 hour TTL
 
     # Filter out non-serializable parameters to avoid JSON encoding issues
     filtered_context = {
@@ -163,6 +211,7 @@ def create_thread(tool_name: str, initial_request: dict[str, Any]) -> str:
 
     context = ThreadContext(
         thread_id=thread_id,
+<<<<<<< HEAD
         created_at=now,
         last_updated_at=now,
         tool_name=tool_name,  # Track which tool initiated this conversation
@@ -174,11 +223,29 @@ def create_thread(tool_name: str, initial_request: dict[str, Any]) -> str:
     client = get_redis_client()
     key = f"thread:{thread_id}"
     client.setex(key, 3600, context.model_dump_json())
+=======
+        created_at=now.isoformat(),
+        last_updated_at=now.isoformat(),
+        tool_name=tool_name,
+        turns=[],
+        initial_context=filtered_context,
+    )
+
+    # Store in SQLite with 1 hour TTL
+    with get_connection() as conn:
+        conn.execute("""
+            INSERT INTO conversation_threads 
+            (thread_id, context_json, created_at, expires_at)
+            VALUES (?, ?, ?, ?)
+        """, (thread_id, context.model_dump_json(), now.isoformat(), expires_at.isoformat()))
+        conn.commit()
+>>>>>>> f31d299 (feat: add uvx support and replace Redis with SQLite)
 
     return thread_id
 
 
 def get_thread(thread_id: str) -> Optional[ThreadContext]:
+<<<<<<< HEAD
     """
     Retrieve thread context from Redis
 
@@ -198,17 +265,23 @@ def get_thread(thread_id: str) -> Optional[ThreadContext]:
         - Handles Redis connection failures gracefully
         - No error information leakage on failure
     """
+=======
+    """Retrieve thread context from SQLite"""
+>>>>>>> f31d299 (feat: add uvx support and replace Redis with SQLite)
     if not thread_id or not _is_valid_uuid(thread_id):
         return None
 
     try:
-        client = get_redis_client()
-        key = f"thread:{thread_id}"
-        data = client.get(key)
-
-        if data:
-            return ThreadContext.model_validate_json(data)
-        return None
+        with get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT context_json FROM conversation_threads 
+                WHERE thread_id = ? AND expires_at > ?
+            """, (thread_id, datetime.now(timezone.utc).isoformat()))
+            
+            row = cursor.fetchone()
+            if row:
+                return ThreadContext.model_validate_json(row[0])
+            return None
     except Exception:
         # Silently handle errors to avoid exposing Redis details
         return None
@@ -271,11 +344,26 @@ def add_turn(
     context.turns.append(turn)
     context.last_updated_at = datetime.now(timezone.utc).isoformat()
 
+<<<<<<< HEAD
     # Save back to Redis and refresh TTL
     try:
         client = get_redis_client()
         key = f"thread:{thread_id}"
         client.setex(key, 3600, context.model_dump_json())  # Refresh TTL to 1 hour
+=======
+    # Save back to SQLite with refreshed TTL
+    try:
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(hours=1)  # Refresh TTL
+        
+        with get_connection() as conn:
+            conn.execute("""
+                UPDATE conversation_threads 
+                SET context_json = ?, expires_at = ?
+                WHERE thread_id = ?
+            """, (context.model_dump_json(), expires_at.isoformat(), thread_id))
+            conn.commit()
+>>>>>>> f31d299 (feat: add uvx support and replace Redis with SQLite)
         return True
     except Exception:
         return False

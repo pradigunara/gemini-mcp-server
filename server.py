@@ -299,7 +299,7 @@ async def reconstruct_thread_context(arguments: dict[str, Any]) -> dict[str, Any
 
     continuation_id = arguments["continuation_id"]
 
-    # Get thread context from Redis
+    # Get thread context from SQLite database
     context = get_thread(continuation_id)
     if not context:
         logger.warning(f"Thread not found: {continuation_id}")
@@ -314,7 +314,7 @@ async def reconstruct_thread_context(arguments: dict[str, Any]) -> dict[str, Any
         # Return error asking Claude to restart conversation with full context
         raise ValueError(
             f"Conversation thread '{continuation_id}' was not found or has expired. "
-            f"This may happen if the conversation was created more than 1 hour ago or if there was an issue with Redis storage. "
+            f"This may happen if the conversation was created more than 1 hour ago or if there was an issue with database storage. "
             f"Please restart the conversation by providing your full question/prompt without the continuation_id parameter. "
             f"This will create a new conversation thread that can continue with follow-up exchanges."
         )

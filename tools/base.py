@@ -811,6 +811,11 @@ If any of these would strengthen your analysis, specify what Claude should searc
         Returns:
             Dict with continuation data if opportunity should be offered, None otherwise
         """
+        # Check if continuation offers are disabled (e.g., during testing)
+        import os
+        if os.getenv("DISABLE_CONTINUATION_OFFERS") == "true":
+            return None
+            
         # Only offer continuation for new conversations (not already threaded)
         continuation_id = getattr(request, "continuation_id", None)
         if continuation_id:
