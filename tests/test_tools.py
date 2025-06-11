@@ -38,13 +38,15 @@ class TestThinkDeepTool:
         )
         mock_create_model.return_value = mock_model
 
-        result = await tool.execute(
-            {
-                "current_analysis": "Initial analysis",
-                "problem_context": "Building a cache",
-                "focus_areas": ["performance", "scalability"],
-            }
-        )
+        # Mock continuation check to focus on tool logic only
+        with patch.object(tool, '_check_continuation_opportunity', return_value=None):
+            result = await tool.execute(
+                {
+                    "current_analysis": "Initial analysis",
+                    "problem_context": "Building a cache",
+                    "focus_areas": ["performance", "scalability"],
+                }
+            )
 
         assert len(result) == 1
         # Parse the JSON response
@@ -298,3 +300,74 @@ class TestAbsolutePathValidation:
         response = json.loads(result[0].text)
         assert response["status"] == "success"
         assert "Analysis complete" in response["content"]
+
+
+class TestContinuationOffers:
+    """Test continuation offer behavior with different approaches"""
+    
+    @pytest.mark.asyncio
+    async def test_chat_tool_with_continuation_disabled_via_mock(self):
+        """Test chat tool with continuation offers disabled via mocking"""
+        from tools.chat import ChatTool
+        from unittest.mock import patch
+        
+        tool = ChatTool()
+        
+        # Mock the continuation check to return None (disabled)
+        with patch.object(tool, '_check_continuation_opportunity', return_value=None):
+            with patch.object(tool, 'create_model') as mock_create_model:
+                # Create proper mock response structure
+                mock_part = Mock()
+                mock_part.text = "Simple answer"
+                mock_content = Mock()
+                mock_content.parts = [mock_part]
+                mock_candidate = Mock()
+                mock_candidate.content = mock_content
+                mock_response = Mock()
+                mock_response.candidates = [mock_candidate]
+                
+                mock_model = Mock()
+                mock_model.generate_content.return_value = mock_response
+                mock_create_model.return_value = mock_model
+                
+                result = await tool.execute({"prompt": "Simple question"})
+        
+        response_data = json.loads(result[0].text)
+        assert response_data["status"] == "success"
+        assert response_data["continuation_offer"] is None
+    
+    @pytest.mark.asyncio
+    async def test_chat_tool_with_continuation_enabled_via_mock(self):
+        """Test chat tool with continuation offers enabled via mocking"""
+        from tools.chat import ChatTool
+        from unittest.mock import patch
+        
+        tool = ChatTool()
+        
+        # Mock the continuation check to return continuation data (enabled)
+        continuation_data = {"remaining_turns": 4, "tool_name": "chat"}
+        with patch.object(tool, '_check_continuation_opportunity', return_value=continuation_data):
+            with patch.object(tool, 'create_model') as mock_create_model:
+                # Create proper mock response structure
+                mock_part = Mock()
+                mock_part.text = "Simple answer"
+                mock_content = Mock()
+                mock_content.parts = [mock_part]
+                mock_candidate = Mock()
+                mock_candidate.content = mock_content
+                mock_response = Mock()
+                mock_response.candidates = [mock_candidate]
+                
+                mock_model = Mock()
+                mock_model.generate_content.return_value = mock_response
+                mock_create_model.return_value = mock_model
+                
+                # Mock conversation memory functions
+                with patch('utils.conversation_memory.create_thread', return_value="test-thread-123"):
+                    with patch('utils.conversation_memory.add_turn', return_value=True):
+                        result = await tool.execute({"prompt": "Simple question"})
+        
+        response_data = json.loads(result[0].text)
+        assert response_data["status"] == "continuation_available"
+        assert response_data["continuation_offer"] is not None
+        assert response_data["continuation_offer"]["remaining_turns"] == 4
