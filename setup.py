@@ -6,8 +6,33 @@ from pathlib import Path
 
 from setuptools import setup
 
-# Import version and author from config to maintain single source of truth
-from config import __author__, __version__
+# Read version from file to avoid import issues during build
+def get_version():
+    """Get version from config.py without importing"""
+    config_path = Path(__file__).parent / "config.py"
+    if config_path.exists():
+        content = config_path.read_text()
+        for line in content.split('\n'):
+            if line.startswith('__version__'):
+                # Extract just the version string, removing comments
+                version_part = line.split('=')[1].split('#')[0].strip().strip('"\'')
+                return version_part
+    return "3.0.0"
+
+def get_author():
+    """Get author from config.py without importing"""
+    config_path = Path(__file__).parent / "config.py"
+    if config_path.exists():
+        content = config_path.read_text()
+        for line in content.split('\n'):
+            if line.startswith('__author__'):
+                # Extract just the author string, removing comments
+                author_part = line.split('=')[1].split('#')[0].strip().strip('"\'')
+                return author_part
+    return "Unknown"
+
+__version__ = get_version()
+__author__ = get_author()
 
 # Read README for long description
 readme_path = Path(__file__).parent / "README.md"

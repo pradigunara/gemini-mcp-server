@@ -213,6 +213,36 @@ def add_turn(
         return False
 
 
+def get_conversation_file_list(context: ThreadContext) -> list[str]:
+    """
+    Get all unique files referenced across all turns in a conversation.
+    
+    This function extracts and deduplicates file references from all conversation
+    turns to enable efficient file embedding.
+    
+    Args:
+        context: ThreadContext containing the complete conversation
+        
+    Returns:
+        list[str]: Deduplicated list of file paths referenced in the conversation
+    """
+    if not context.turns:
+        return []
+    
+    # Collect all unique files from all turns, preserving order of first appearance
+    seen_files = set()
+    unique_files = []
+    
+    for turn in context.turns:
+        if turn.files:
+            for file_path in turn.files:
+                if file_path not in seen_files:
+                    seen_files.add(file_path)
+                    unique_files.append(file_path)
+    
+    return unique_files
+
+
 def build_conversation_history(context: ThreadContext) -> str:
     """Build formatted conversation history"""
     if not context.turns:
