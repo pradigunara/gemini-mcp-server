@@ -1214,7 +1214,7 @@ When recommending searches, be specific about what information you need and why 
                 from providers.registry import ModelProviderRegistry
 
                 tool_category = self.get_model_category()
-                suggested_model = ModelProviderRegistry.get_preferred_fallback_model(tool_category)
+                suggested_model = ModelProviderRegistry.get_preferred_fallback_model(tool_category, self.get_name())
 
                 # Build error message based on why selection is required
                 if model_name.lower() == "auto":

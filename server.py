@@ -280,6 +280,28 @@ def configure_providers():
     from providers.xai import XAIModelProvider
     from utils.model_restrictions import get_restriction_service
 
+    # OpenRouter-exclusive mode: If OpenRouter API key is present, use ONLY OpenRouter
+    # This ignores all other API keys (including global GEMINI_API_KEY) for clean provider isolation
+    openrouter_key = os.getenv("OPENROUTER_API_KEY")
+    if openrouter_key and openrouter_key != "your_openrouter_api_key_here":
+        # Use ONLY OpenRouter when its key is present
+        ModelProviderRegistry.register_provider(ProviderType.OPENROUTER, OpenRouterProvider)
+        logger.info("OpenRouter API key found - using OpenRouter exclusively")
+        logger.info("Available providers: OpenRouter")
+        
+        # Log available models from OpenRouter registry
+        try:
+            registry = ModelProviderRegistry()
+            provider = registry.get_provider(ProviderType.OPENROUTER)
+            if provider:
+                models = provider.list_models()
+                logger.info(f"Available tools: {TOOL_PROMPTS.keys()}")
+                logger.info(f"OpenRouter models loaded: {len(models)} models available")
+        except Exception as e:
+            logger.debug(f"Could not list OpenRouter models: {e}")
+        
+        return  # Skip all other provider checks
+
     valid_providers = []
     has_native_apis = False
     has_openrouter = False
@@ -1253,9 +1275,23 @@ async def main():
         )
 
 
-if __name__ == "__main__":
+def main_cli():
+    """
+    Console script entry point for zen-mcp-server.
+    
+    This function is called when the package is installed and run as:
+    - uvx zen-mcp-server
+    - uvx --from <repo-url> zen-mcp-server
+    - python -m zen_mcp_server (if installed as a module)
+    
+    It's a synchronous wrapper around the async main() function.
+    """
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         # Handle graceful shutdown
         pass
+
+
+if __name__ == "__main__":
+    main_cli()

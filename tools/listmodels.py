@@ -286,7 +286,7 @@ class ListModelsTool(BaseTool):
 
         # Add usage tips
         output_lines.append("\n**Usage Tips**:")
-        output_lines.append("- Use model aliases (e.g., 'flash', 'o3', 'opus') for convenience")
+        output_lines.append("- Use model aliases (e.g., 'flash', 'sonnet', 'pro') for convenience")
         output_lines.append("- In auto mode, Claude will select the best model for each task")
         output_lines.append("- Custom models are only available when CUSTOM_API_URL is set")
         output_lines.append("- OpenRouter provides access to many cloud models with one API key")

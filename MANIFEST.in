@@ -1,0 +1,8 @@
+include conf/*.json
+include docs/*.md
+include README.md
+include LICENSE
+recursive-include providers *.py
+recursive-include systemprompts *.py
+recursive-include tools *.py
+recursive-include utils *.py
