@@ -245,16 +245,17 @@ class ModelProviderRegistry:
         return os.getenv(env_var)
 
     @classmethod
-    def get_preferred_fallback_model(cls, tool_category: Optional["ToolModelCategory"] = None) -> str:
+    def get_preferred_fallback_model(cls, tool_category: Optional["ToolModelCategory"] = None, tool_name: Optional[str] = None) -> str:
         """Get the preferred fallback model based on available API keys and tool category.
 
         This method checks which providers have valid API keys and returns
         a sensible default model for auto mode fallback situations.
 
-        Takes into account model restrictions when selecting fallback models.
+        Takes into account model restrictions and custom task-to-model mappings.
 
         Args:
             tool_category: Optional category to influence model selection
+            tool_name: Optional tool name for tool-specific overrides
 
         Returns:
             Model name string for fallback use
@@ -262,7 +263,43 @@ class ModelProviderRegistry:
         # Import here to avoid circular import
         from tools.models import ToolModelCategory
 
-        # Get available models respecting restrictions
+        # Check for custom task-to-model configuration
+        try:
+            from utils.task_model_config import get_task_model_config
+            
+            task_config = get_task_model_config()
+            if task_config.is_enabled() and tool_category:
+                # Convert category enum to string
+                category_str = tool_category.value if hasattr(tool_category, 'value') else str(tool_category).split('.')[-1].lower()
+                
+                # Get preferred models from configuration
+                preferred_models = []
+                if tool_name:
+                    # Check for tool-specific configuration first
+                    preferred_models = task_config.get_effective_models_for_tool(tool_name, category_str)
+                
+                if not preferred_models:
+                    # Fall back to category-based configuration
+                    preferred_models = task_config.get_preferred_models_for_category(category_str)
+                
+                if preferred_models:
+                    # Get available models and find first match from preferred list
+                    available_models = cls.get_available_models(respect_restrictions=True)
+                    for preferred_model in preferred_models:
+                        if preferred_model in available_models:
+                            logging.info(f"Using configured preferred model '{preferred_model}' for {category_str} task")
+                            return preferred_model
+                    
+                    # If no preferred models are available, log and fall back to default logic
+                    logging.debug(f"None of the preferred models {preferred_models} are available, using default selection")
+        except ImportError:
+            # Task model config not available, continue with default logic
+            logging.debug("Task model configuration not available, using default model selection")
+        except Exception as e:
+            # Log error but don't fail - fall back to default logic
+            logging.debug(f"Error loading task model configuration: {e}")
+
+        # Get available models respecting restrictions (original logic continues)
         available_models = cls.get_available_models(respect_restrictions=True)
 
         # Group by provider
@@ -399,14 +436,10 @@ class ModelProviderRegistry:
         # Then check OpenRouter for high-context/powerful models
         openrouter_provider = cls.get_provider(ProviderType.OPENROUTER)
         if openrouter_provider:
-            # Prefer models known for deep reasoning
+            # Prefer models known for deep reasoning (opus removed for cost control)
             preferred_models = [
-                "anthropic/claude-sonnet-4",
-                "anthropic/claude-opus-4",
+                "openai/o4-mini-high",
                 "google/gemini-2.5-pro",
-                "google/gemini-pro-1.5",
-                "meta-llama/llama-3.1-70b-instruct",
-                "mistralai/mixtral-8x7b-instruct",
             ]
             for model in preferred_models:
                 try:

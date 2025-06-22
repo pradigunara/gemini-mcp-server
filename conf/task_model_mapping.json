@@ -1,0 +1,72 @@
+{
+  "_README": {
+    "description": "Task-to-model mapping configuration for Zen MCP Server",
+    "usage": "Define custom model preferences for different tool categories",
+    "categories": {
+      "extended_reasoning": "Tools requiring deep analysis and complex reasoning",
+      "fast_response": "Tools prioritizing speed and cost efficiency",
+      "balanced": "Tools needing balanced performance and capability"
+    },
+    "instructions": [
+      "Set 'enabled': true to use custom mappings, false to use default hardcoded logic",
+      "List models in order of preference (first available model will be used)",
+      "Use model aliases from custom_models.json (e.g., 'pro', 'flash')",
+      "Or use full model names (e.g., 'google/gemini-2.5-pro')",
+      "Empty arrays mean use system defaults for that category"
+    ]
+  },
+  "enabled": true,
+  "mappings": {
+    "extended_reasoning": {
+      "description": "For complex analysis, debugging, code review, security audits",
+      "preferred_models": [
+        "o4",
+        "r1",
+        "pro"
+      ]
+    },
+    "fast_response": {
+      "description": "For quick chat, simple queries, fast interactions",
+      "preferred_models": [
+        "grok",
+        "flash"
+      ]
+    },
+    "balanced": {
+      "description": "For general analysis, planning, moderate complexity tasks",
+      "preferred_models": [
+        "r1",
+        "flash"
+      ]
+    }
+  },
+  "tool_overrides": {
+    "description": "Override specific tools to use different categories or models",
+    "enabled": true,
+    "overrides": {
+      "chat": {
+        "category": "fast_response",
+        "preferred_models": [
+          "grok",
+          "flash"
+        ]
+      },
+      "thinkdeep": {
+        "category": "extended_reasoning",
+        "preferred_models": [
+          "o4",
+          "r1",
+          "pro"
+        ]
+      },
+      "debug": {
+        "category": "extended_reasoning",
+        "preferred_models": [
+          "o4",
+          "r1",
+          "pro"
+        ]
+      }
+    }
+  }
+}

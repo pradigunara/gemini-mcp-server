@@ -58,3 +58,53 @@ ignore = [
 [build-system]
 requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "zen-mcp-server"
+version = "5.6.7"
+description = "Zen MCP Server - Multi-model AI assistant with MCP protocol support"
+readme = "README.md"
+license = "MIT"
+authors = [
+    {name = "Fahad Gilani", email = "fahad@beehiveinnovations.com"}
+]
+keywords = ["mcp", "ai", "assistant", "claude", "gemini", "openai"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.0.0",
+    "google-genai>=1.19.0",
+    "openai>=1.55.2",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["providers*", "systemprompts*", "tools*", "utils*", "conf*"]
+
+[tool.setuptools]
+py-modules = ["server", "config"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"*" = ["conf/*.json", "docs/*.md"]
+
+[project.scripts]
+zen-mcp-server = "server:main_cli"
+
+[project.urls]
+Homepage = "https://github.com/BeehiveInnovations/zen-mcp-server"
+Documentation = "https://github.com/BeehiveInnovations/zen-mcp-server/blob/main/README.md"
+Repository = "https://github.com/BeehiveInnovations/zen-mcp-server"
+Issues = "https://github.com/BeehiveInnovations/zen-mcp-server/issues"
